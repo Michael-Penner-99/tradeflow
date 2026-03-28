@@ -1,0 +1,23 @@
+{
+  "name": "tradeflow-server",
+  "version": "1.0.0",
+  "description": "TradeFlow API server",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1",
+    "@supabase/supabase-js": "^2.49.4",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "intuit-oauth": "^4.2.2",
+    "multer": "^2.1.1",
+    "node-quickbooks": "^2.0.48",
+    "nodemailer": "^8.0.2",
+    "puppeteer": "^24.38.0"
+  }
+}
