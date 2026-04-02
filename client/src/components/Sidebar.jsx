@@ -8,12 +8,14 @@ import {
   ClipboardList,
   Users,
   Calendar,
-  Settings
+  Settings,
+  LogOut
 } from 'lucide-react';
 import NotificationBell from './NotificationBell.jsx';
+import { useAuth } from '../contexts/AuthContext.jsx';
 
 const navItems = [
-  { label: 'Dashboard',        icon: LayoutDashboard, to: '/',          end: true, enabled: true },
+  { label: 'Dashboard',        icon: LayoutDashboard, to: '/dashboard', end: true, enabled: true },
   { label: 'Upload Statement', icon: Upload,           to: '/upload',    enabled: true },
   { label: 'Inventory',        icon: Package,          to: '/inventory', enabled: true },
   { label: 'Invoices',         icon: FileText,         to: '/invoices',  enabled: true },
@@ -24,6 +26,8 @@ const navItems = [
 ];
 
 export default function Sidebar() {
+  const { signOut } = useAuth();
+
   return (
     <aside className="w-64 flex-shrink-0 bg-[#0F172A] flex flex-col h-screen">
       <div className="flex items-center gap-3 px-6 py-5 border-b border-slate-700">
@@ -65,7 +69,16 @@ export default function Sidebar() {
           <p className="text-slate-500 text-xs">TradeFlow v1.0</p>
           <p className="text-slate-600 text-xs mt-0.5">Plumbing & Trades</p>
         </div>
-        <NotificationBell />
+        <div className="flex items-center gap-1">
+          <NotificationBell />
+          <button
+            onClick={signOut}
+            className="p-2 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+            title="Sign out"
+          >
+            <LogOut className="w-5 h-5" />
+          </button>
+        </div>
       </div>
     </aside>
   );
