@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, FileText, Eye, Pencil, Trash2 } from 'lucide-react';
+import { Plus, FileText, Eye, Pencil, Trash2, Upload, Loader2 } from 'lucide-react';
 import Toast from '../components/Toast.jsx';
 
 const STATUS_STYLES = {
@@ -29,6 +29,8 @@ export default function Invoices() {
   const [loading, setLoading] = useState(true);
   const [deleteId, setDeleteId] = useState(null);
   const [toast, setToast] = useState(null);
+  const [qbConnected, setQbConnected] = useState(false);
+  const [syncingId, setSyncingId] = useState(null);
 
   const load = () => {
     fetch('/api/invoices')
@@ -38,6 +40,26 @@ export default function Invoices() {
   };
 
   useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    fetch('/api/quickbooks/status').then(r => r.json())
+      .then(data => setQbConnected(data.connected))
+      .catch(() => {});
+  }, []);
+
+  const handleSyncToQBO = async (id) => {
+    setSyncingId(id);
+    try {
+      const res = await fetch(`/api/quickbooks/export/${id}`, { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setToast({ message: `Synced to QuickBooks (ID: ${data.qbInvoiceId})`, type: 'success' });
+    } catch (err) {
+      setToast({ message: `QBO sync failed: ${err.message}`, type: 'error' });
+    } finally {
+      setSyncingId(null);
+    }
+  };
 
   const handleDelete = async (id) => {
     try {
@@ -92,7 +114,7 @@ export default function Invoices() {
                   <th className="text-left px-4 py-3 font-medium text-gray-700">Date</th>
                   <th className="text-left px-4 py-3 font-medium text-gray-700">Status</th>
                   <th className="text-right px-4 py-3 font-medium text-gray-700">Total</th>
-                  <th className="w-28" />
+                  <th className="w-36" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -118,6 +140,16 @@ export default function Invoices() {
                         <Link to={`/invoices/${inv.id}/edit`} className="p-1.5 text-gray-400 hover:text-gray-700 rounded" title="Edit">
                           <Pencil className="w-4 h-4" />
                         </Link>
+                        {qbConnected && (
+                          <button
+                            onClick={() => handleSyncToQBO(inv.id)}
+                            disabled={syncingId === inv.id}
+                            className="p-1.5 text-gray-400 hover:text-green-600 rounded disabled:opacity-50"
+                            title="Sync to QuickBooks"
+                          >
+                            {syncingId === inv.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                          </button>
+                        )}
                         <button
                           onClick={() => setDeleteId(inv.id)}
                           className="p-1.5 text-gray-400 hover:text-red-500 rounded"
