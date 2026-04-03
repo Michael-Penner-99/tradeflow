@@ -201,7 +201,7 @@ export default function InvoiceBuilder() {
       apiFetch('/api/settings').then(r => r.json()),
       apiFetch('/api/customers').then(r => r.json()),
       apiFetch('/api/inventory').then(r => r.json()),
-      id ? fetch(`/api/invoices/${id}`).then(r => r.json()) : Promise.resolve(null)
+      id ? apiFetch(`/api/invoices/${id}`).then(r => r.json()) : Promise.resolve(null)
     ]).then(([s, c, inv, existing]) => {
       setSettings(s || {});
       setCustomers(Array.isArray(c) ? c : []);

@@ -144,7 +144,7 @@ router.post('/export/:invoiceId', requireAuth, async (req, res) => {
       body: JSON.stringify({ Invoice: qbInvoiceBody })
     });
 
-    const responseData = JSON.parse(response.text());
+    const responseData = JSON.parse(response.text);
     res.json({ success: true, qbInvoiceId: responseData.Invoice?.Id });
   } catch (err) {
     console.error('QB export error:', err);
