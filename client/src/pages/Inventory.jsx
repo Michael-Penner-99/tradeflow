@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Search, Download, Package, AlertTriangle, Pencil, Trash2, Check, X, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { apiFetch } from '../lib/api.js';
 
 const LOW_STOCK_THRESHOLD = 5;
 
@@ -38,8 +39,8 @@ export default function Inventory() {
 
   useEffect(() => {
     Promise.all([
-      fetch('/api/inventory').then(r => r.json()),
-      fetch('/api/inventory/suppliers').then(r => r.json())
+      apiFetch('/api/inventory').then(r => r.json()),
+      apiFetch('/api/inventory/suppliers').then(r => r.json())
     ])
       .then(([inv, sup]) => {
         setItems(Array.isArray(inv) ? inv : []);
@@ -82,7 +83,7 @@ export default function Inventory() {
   const saveEdit = async () => {
     setSaving(true);
     try {
-      const res = await fetch(`/api/inventory/${editingId}`, {
+      const res = await apiFetch(`/api/inventory/${editingId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(editData)
@@ -101,7 +102,7 @@ export default function Inventory() {
 
   const handleDelete = async (id) => {
     try {
-      const res = await fetch(`/api/inventory/${id}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/inventory/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error((await res.json()).error);
       setItems(prev => prev.filter(i => i.id !== id));
       setDeleteId(null);

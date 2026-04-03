@@ -10,6 +10,7 @@ import {
   Link as LinkIcon
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { apiFetch } from '../lib/api.js';
 
 const STATES = { IDLE: 'idle', UPLOADING: 'uploading', REVIEWING: 'reviewing', CONFIRMED: 'confirmed' };
 
@@ -41,7 +42,7 @@ export default function Upload() {
   const fileInputRef = useRef(null);
 
   useEffect(() => {
-    fetch('/api/suppliers')
+    apiFetch('/api/suppliers')
       .then(r => r.json())
       .then(data => setSuppliers(Array.isArray(data) ? data : []))
       .catch(() => setError('Failed to load suppliers'));
@@ -61,7 +62,7 @@ export default function Upload() {
     formData.append('file', file);
 
     try {
-      const res = await fetch('/api/statements/upload', { method: 'POST', body: formData });
+      const res = await apiFetch('/api/statements/upload', { method: 'POST', body: formData });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Upload failed');
 
@@ -97,7 +98,7 @@ export default function Upload() {
     if (!newSupplierName.trim()) return;
     setSavingSupplier(true);
     try {
-      const res = await fetch('/api/suppliers', {
+      const res = await apiFetch('/api/suppliers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newSupplierName.trim(), account_number: newSupplierAccount.trim() || null })
@@ -121,7 +122,7 @@ export default function Upload() {
     setError(null);
     setConfirming(true);
     try {
-      const res = await fetch(`/api/statements/confirm/${statementId}`, {
+      const res = await apiFetch(`/api/statements/confirm/${statementId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ lineItems, supplierId: selectedSupplierId || null })

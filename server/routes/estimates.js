@@ -7,11 +7,12 @@ const router = Router();
 
 const fmt = (n) => `$${parseFloat(n || 0).toFixed(2)}`;
 
-async function generateEstimateNumber() {
+async function generateEstimateNumber(userId) {
   const year = new Date().getFullYear();
   const { data } = await supabase
     .from('estimates')
     .select('estimate_number')
+    .eq('user_id', userId)
     .like('estimate_number', `EST-${year}-%`)
     .order('estimate_number', { ascending: false })
     .limit(1);
@@ -53,6 +54,7 @@ router.get('/', async (req, res) => {
     const { data, error } = await supabase
       .from('estimates')
       .select('*, customers(id, name, company_name)')
+      .eq('user_id', req.userId)
       .order('created_at', { ascending: false });
     if (error) throw error;
     res.json(data);
@@ -68,6 +70,7 @@ router.get('/:id', async (req, res) => {
       .from('estimates')
       .select('*, customers(*)')
       .eq('id', req.params.id)
+      .eq('user_id', req.userId)
       .single();
     if (error) throw error;
 
@@ -87,7 +90,7 @@ router.get('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
   try {
     const { lineItems = [], gstEnabled = true, pstRate = 0, ...rest } = req.body;
-    const estimateNumber = rest.estimate_number || await generateEstimateNumber();
+    const estimateNumber = rest.estimate_number || await generateEstimateNumber(req.userId);
     const { subtotal, total } = calcTotals(lineItems, gstEnabled, pstRate);
 
     const { data: estimate, error } = await supabase
@@ -98,7 +101,8 @@ router.post('/', async (req, res) => {
         subtotal,
         gst_enabled: gstEnabled,
         pst_rate: pstRate,
-        total
+        total,
+        user_id: req.userId
       })
       .select()
       .single();
@@ -141,6 +145,7 @@ router.put('/:id', async (req, res) => {
         updated_at: new Date().toISOString()
       })
       .eq('id', req.params.id)
+      .eq('user_id', req.userId)
       .select()
       .single();
     if (error) throw error;
@@ -160,7 +165,7 @@ router.put('/:id', async (req, res) => {
 // DELETE /api/estimates/:id
 router.delete('/:id', async (req, res) => {
   try {
-    const { error } = await supabase.from('estimates').delete().eq('id', req.params.id);
+    const { error } = await supabase.from('estimates').delete().eq('id', req.params.id).eq('user_id', req.userId);
     if (error) throw error;
     res.json({ success: true });
   } catch (err) {
@@ -177,6 +182,7 @@ router.post('/:id/send', async (req, res) => {
       .from('estimates')
       .update({ status: 'sent', approval_token: token })
       .eq('id', req.params.id)
+      .eq('user_id', req.userId)
       .select('*, customers(*)')
       .single();
     if (upErr) throw upErr;
@@ -184,7 +190,7 @@ router.post('/:id/send', async (req, res) => {
     const { data: settings } = await supabase
       .from('company_settings')
       .select('*')
-      .limit(1)
+      .eq('user_id', req.userId)
       .maybeSingle();
 
     if (estimate.customers?.email && process.env.SMTP_USER && process.env.SMTP_PASS) {
@@ -236,6 +242,7 @@ router.post('/:id/convert', async (req, res) => {
       .from('estimates')
       .select('*')
       .eq('id', req.params.id)
+      .eq('user_id', req.userId)
       .single();
 
     const { data: lineItems } = await supabase
@@ -249,6 +256,7 @@ router.post('/:id/convert', async (req, res) => {
     const { data: existing } = await supabase
       .from('invoices')
       .select('invoice_number')
+      .eq('user_id', req.userId)
       .like('invoice_number', `INV-${year}-%`)
       .order('invoice_number', { ascending: false })
       .limit(1);
@@ -272,7 +280,8 @@ router.post('/:id/convert', async (req, res) => {
         pst_rate: estimate.pst_rate,
         total: estimate.total,
         status: 'draft',
-        notes: estimate.notes
+        notes: estimate.notes,
+        user_id: req.userId
       })
       .select()
       .single();

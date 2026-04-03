@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Plus, Save, Send, Eye, Loader2, Clock, Package } from 'lucide-react';
 import Toast from '../components/Toast.jsx';
 import { calcItem, makeItem, LineItemsHeader, ItemRow, BundleBox } from '../components/LineItemTable.jsx';
+import { apiFetch } from '../lib/api.js';
 
 const fmt = (n) => `$${parseFloat(n || 0).toFixed(2)}`;
 const today = () => new Date().toISOString().split('T')[0];
@@ -197,9 +198,9 @@ export default function InvoiceBuilder() {
   // Load initial data
   useEffect(() => {
     Promise.all([
-      fetch('/api/settings').then(r => r.json()),
-      fetch('/api/customers').then(r => r.json()),
-      fetch('/api/inventory').then(r => r.json()),
+      apiFetch('/api/settings').then(r => r.json()),
+      apiFetch('/api/customers').then(r => r.json()),
+      apiFetch('/api/inventory').then(r => r.json()),
       id ? fetch(`/api/invoices/${id}`).then(r => r.json()) : Promise.resolve(null)
     ]).then(([s, c, inv, existing]) => {
       setSettings(s || {});
@@ -257,7 +258,7 @@ export default function InvoiceBuilder() {
       const payload = buildPayload();
       const url = invoiceId ? `/api/invoices/${invoiceId}` : '/api/invoices';
       const method = invoiceId ? 'PUT' : 'POST';
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -373,7 +374,7 @@ export default function InvoiceBuilder() {
   const addQuickCustomer = async () => {
     if (!newCustomerName.trim()) return;
     try {
-      const res = await fetch('/api/customers', {
+      const res = await apiFetch('/api/customers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newCustomerName.trim() })

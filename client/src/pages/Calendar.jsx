@@ -4,6 +4,7 @@ import { format, parse, startOfWeek, getDay } from 'date-fns';
 import { enCA } from 'date-fns/locale';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import { X, Trash2, Loader2 } from 'lucide-react';
+import { apiFetch } from '../lib/api.js';
 import Toast from '../components/Toast.jsx';
 
 const locales = { 'en-CA': enCA };
@@ -133,8 +134,8 @@ export default function CalendarPage() {
 
   const load = useCallback(() => {
     Promise.all([
-      fetch('/api/calendar').then(r => r.json()),
-      fetch('/api/customers').then(r => r.json())
+      apiFetch('/api/calendar').then(r => r.json()),
+      apiFetch('/api/customers').then(r => r.json())
     ]).then(([evts, custs]) => {
       const mapped = (Array.isArray(evts) ? evts : []).map(e => ({
         id: e.id,
@@ -168,7 +169,7 @@ export default function CalendarPage() {
     try {
       const url = existingId ? `/api/calendar/${existingId}` : '/api/calendar';
       const method = existingId ? 'PUT' : 'POST';
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -191,7 +192,7 @@ export default function CalendarPage() {
 
   const handleDelete = async (id) => {
     try {
-      await fetch(`/api/calendar/${id}`, { method: 'DELETE' });
+      await apiFetch(`/api/calendar/${id}`, { method: 'DELETE' });
       setSlideOver(null);
       load();
       setToast({ message: 'Event deleted', type: 'success' });

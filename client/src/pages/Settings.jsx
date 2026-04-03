@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Upload, Building2, Link2, Link2Off, Loader2 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import Toast from '../components/Toast.jsx';
+import { apiFetch } from '../lib/api.js';
 
 const PROVINCES = [
   'Alberta', 'British Columbia', 'Manitoba', 'New Brunswick',
@@ -40,11 +41,11 @@ export default function Settings() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   useEffect(() => {
-    fetch('/api/settings')
+    apiFetch('/api/settings')
       .then(r => r.json())
       .then(data => { if (data && data.id) setForm(f => ({ ...f, ...data })); })
       .catch(() => {});
-    fetch('/api/quickbooks/status')
+    apiFetch('/api/quickbooks/status')
       .then(r => r.json())
       .then(data => setQbStatus(data))
       .catch(() => {});
@@ -55,7 +56,7 @@ export default function Settings() {
     const qb = searchParams.get('qb');
     if (qb === 'connected') {
       setToast({ message: 'QuickBooks connected successfully', type: 'success' });
-      fetch('/api/quickbooks/status').then(r => r.json()).then(setQbStatus).catch(() => {});
+      apiFetch('/api/quickbooks/status').then(r => r.json()).then(setQbStatus).catch(() => {});
       setSearchParams({});
     } else if (qb === 'error') {
       setToast({ message: 'QuickBooks connection failed. Check your credentials.', type: 'error' });
@@ -68,7 +69,7 @@ export default function Settings() {
   const handleQbConnect = async () => {
     setQbConnecting(true);
     try {
-      const res = await fetch('/api/quickbooks/connect');
+      const res = await apiFetch('/api/quickbooks/connect');
       const data = await res.json();
       if (data.url) window.location.href = data.url;
     } catch {
@@ -79,7 +80,7 @@ export default function Settings() {
 
   const handleQbDisconnect = async () => {
     try {
-      await fetch('/api/quickbooks/disconnect', { method: 'POST' });
+      await apiFetch('/api/quickbooks/disconnect', { method: 'POST' });
       setQbStatus({ connected: false });
       setToast({ message: 'QuickBooks disconnected', type: 'success' });
     } catch {
@@ -93,7 +94,7 @@ export default function Settings() {
     const fd = new FormData();
     fd.append('logo', file);
     try {
-      const res = await fetch('/api/settings/logo', { method: 'POST', body: fd });
+      const res = await apiFetch('/api/settings/logo', { method: 'POST', body: fd });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setForm(f => ({ ...f, logo_url: data.logo_url }));
@@ -111,7 +112,7 @@ export default function Settings() {
       const body = { ...form };
       delete body.id;
       delete body.created_at;
-      const res = await fetch('/api/settings', {
+      const res = await apiFetch('/api/settings', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)

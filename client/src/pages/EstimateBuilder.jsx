@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Plus, Save, Send, Loader2, Clock, Package, ArrowRight, CheckCircle, XCircle } from 'lucide-react';
 import Toast from '../components/Toast.jsx';
 import { calcItem, makeItem, LineItemsHeader, ItemRow, BundleBox } from '../components/LineItemTable.jsx';
+import { apiFetch } from '../lib/api.js';
 
 const fmt = (n) => `$${parseFloat(n || 0).toFixed(2)}`;
 const today = () => new Date().toISOString().split('T')[0];
@@ -195,10 +196,10 @@ export default function EstimateBuilder() {
 
   useEffect(() => {
     Promise.all([
-      fetch('/api/settings').then(r => r.json()),
-      fetch('/api/customers').then(r => r.json()),
-      fetch('/api/inventory').then(r => r.json()),
-      id ? fetch(`/api/estimates/${id}`).then(r => r.json()) : Promise.resolve(null)
+      apiFetch('/api/settings').then(r => r.json()),
+      apiFetch('/api/customers').then(r => r.json()),
+      apiFetch('/api/inventory').then(r => r.json()),
+      id ? apiFetch(`/api/estimates/${id}`).then(r => r.json()) : Promise.resolve(null)
     ]).then(([s, c, inv, existing]) => {
       setSettings(s || {});
       setCustomers(Array.isArray(c) ? c : []);
@@ -245,7 +246,7 @@ export default function EstimateBuilder() {
       const payload = buildPayload();
       const url = estimateId ? `/api/estimates/${estimateId}` : '/api/estimates';
       const method = estimateId ? 'PUT' : 'POST';
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -282,7 +283,7 @@ export default function EstimateBuilder() {
     if (!estimateId) { await doSave(); return; }
     setSending(true);
     try {
-      const res = await fetch(`/api/estimates/${estimateId}/send`, { method: 'POST' });
+      const res = await apiFetch(`/api/estimates/${estimateId}/send`, { method: 'POST' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setStatus('sent');
@@ -301,7 +302,7 @@ export default function EstimateBuilder() {
     if (!estimateId) return;
     setConverting(true);
     try {
-      const res = await fetch(`/api/estimates/${estimateId}/convert`, { method: 'POST' });
+      const res = await apiFetch(`/api/estimates/${estimateId}/convert`, { method: 'POST' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setStatus('converted');
@@ -384,7 +385,7 @@ export default function EstimateBuilder() {
   const addQuickCustomer = async () => {
     if (!newCustomerName.trim()) return;
     try {
-      const res = await fetch('/api/customers', {
+      const res = await apiFetch('/api/customers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: newCustomerName.trim() })

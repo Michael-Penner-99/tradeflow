@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, Pencil, Trash2, Users } from 'lucide-react';
 import SlideOver from '../components/SlideOver.jsx';
 import Toast from '../components/Toast.jsx';
+import { apiFetch } from '../lib/api.js';
 
 const PROVINCES = [
   'Alberta', 'British Columbia', 'Manitoba', 'New Brunswick',
@@ -35,7 +36,7 @@ export default function Customers() {
   const [toast, setToast] = useState(null);
 
   const load = useCallback(() => {
-    fetch('/api/customers')
+    apiFetch('/api/customers')
       .then(r => r.json())
       .then(data => { setCustomers(Array.isArray(data) ? data : []); setLoading(false); })
       .catch(() => setLoading(false));
@@ -55,7 +56,7 @@ export default function Customers() {
       const method = editId ? 'PUT' : 'POST';
       const body = { ...form };
       delete body.id; delete body.created_at;
-      const res = await fetch(url, {
+      const res = await apiFetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
@@ -74,7 +75,7 @@ export default function Customers() {
 
   const handleDelete = async (id) => {
     try {
-      const res = await fetch(`/api/customers/${id}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/customers/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error((await res.json()).error);
       setDeleteId(null);
       load();

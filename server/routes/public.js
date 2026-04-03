@@ -19,10 +19,11 @@ router.get('/estimates/:token', async (req, res) => {
       .eq('estimate_id', estimate.id)
       .order('sort_order');
 
+    // Fetch company settings for the estimate's owner
     const { data: settings } = await supabase
       .from('company_settings')
       .select('company_name, logo_url, phone, email, address_line1, city, province, gst_number, etransfer_email')
-      .limit(1)
+      .eq('user_id', estimate.user_id)
       .maybeSingle();
 
     // Mark as viewed if still 'sent'
@@ -31,7 +32,8 @@ router.get('/estimates/:token', async (req, res) => {
       await supabase.from('notifications').insert({
         type: 'estimate_viewed',
         message: `${estimate.customers?.name || 'Customer'} viewed estimate ${estimate.estimate_number}`,
-        link: `/estimates/${estimate.id}/edit`
+        link: `/estimates/${estimate.id}/edit`,
+        user_id: estimate.user_id
       });
     }
 
@@ -69,7 +71,8 @@ router.post('/estimates/:token/respond', async (req, res) => {
       message: action === 'approve'
         ? `${customerName} approved estimate ${estimate.estimate_number}`
         : `${customerName} declined estimate ${estimate.estimate_number}`,
-      link: `/estimates/${estimate.id}/edit`
+      link: `/estimates/${estimate.id}/edit`,
+      user_id: estimate.user_id
     });
 
     res.json({ status: newStatus });

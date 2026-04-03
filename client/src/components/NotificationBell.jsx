@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Bell, Check, CheckCheck, ExternalLink } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { apiFetch } from '../lib/api.js';
 
 const TYPE_STYLES = {
   estimate_approved: 'text-green-600',
@@ -34,7 +35,7 @@ export default function NotificationBell() {
   const navigate = useNavigate();
 
   const load = () => {
-    fetch('/api/notifications')
+    apiFetch('/api/notifications')
       .then(r => r.json())
       .then(data => setNotifications(Array.isArray(data) ? data : []))
       .catch(() => {});
@@ -58,12 +59,12 @@ export default function NotificationBell() {
   const unreadCount = notifications.filter(n => !n.read).length;
 
   const markRead = async (id) => {
-    await fetch(`/api/notifications/${id}/read`, { method: 'PATCH' });
+    await apiFetch(`/api/notifications/${id}/read`, { method: 'PATCH' });
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
   };
 
   const markAllRead = async () => {
-    await fetch('/api/notifications/read-all', { method: 'PATCH' });
+    await apiFetch('/api/notifications/read-all', { method: 'PATCH' });
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
   };
 

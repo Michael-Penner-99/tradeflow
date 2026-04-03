@@ -10,6 +10,7 @@ router.get('/', async (req, res) => {
     let query = supabase
       .from('calendar_events')
       .select('*, customers(id, name), invoices(id, invoice_number), estimates(id, estimate_number)')
+      .eq('user_id', req.userId)
       .order('start_time');
     if (start) query = query.gte('start_time', start);
     if (end) query = query.lte('start_time', end);
@@ -26,7 +27,7 @@ router.post('/', async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('calendar_events')
-      .insert(req.body)
+      .insert({ ...req.body, user_id: req.userId })
       .select('*, customers(id, name)')
       .single();
     if (error) throw error;
@@ -49,6 +50,7 @@ router.put('/:id', async (req, res) => {
       .from('calendar_events')
       .update(body)
       .eq('id', req.params.id)
+      .eq('user_id', req.userId)
       .select('*, customers(id, name)')
       .single();
     if (error) throw error;
@@ -61,7 +63,7 @@ router.put('/:id', async (req, res) => {
 // DELETE /api/calendar/:id
 router.delete('/:id', async (req, res) => {
   try {
-    const { error } = await supabase.from('calendar_events').delete().eq('id', req.params.id);
+    const { error } = await supabase.from('calendar_events').delete().eq('id', req.params.id).eq('user_id', req.userId);
     if (error) throw error;
     res.json({ success: true });
   } catch (err) {

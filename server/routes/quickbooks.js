@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import OAuthClient from 'intuit-oauth';
 import { supabase } from '../supabase.js';
+import { requireAuth } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -14,12 +15,12 @@ function getOAuthClient() {
 }
 
 // GET /api/quickbooks/connect
-router.get('/connect', (req, res) => {
+router.get('/connect', requireAuth, (req, res) => {
   try {
     const oauthClient = getOAuthClient();
     const authUri = oauthClient.authorizeUri({
       scope: [OAuthClient.scopes.Accounting, OAuthClient.scopes.OpenId],
-      state: 'tradeflow'
+      state: req.userId
     });
     res.json({ url: authUri });
   } catch (err) {
@@ -27,21 +28,24 @@ router.get('/connect', (req, res) => {
   }
 });
 
-// GET /api/quickbooks/callback
+// GET /api/quickbooks/callback (public — browser redirect from Intuit)
 router.get('/callback', async (req, res) => {
   try {
     const oauthClient = getOAuthClient();
     const authResponse = await oauthClient.createToken(req.url);
     const token = authResponse.getJson();
+    const userId = req.query.state;
+
+    if (!userId) throw new Error('Missing user ID in OAuth state');
 
     await supabase.from('quickbooks_tokens').upsert({
-      id: 1,
+      user_id: userId,
       access_token: token.access_token,
       refresh_token: token.refresh_token,
       realm_id: token.realmId || oauthClient.getToken().realmId,
       token_expires_at: new Date(Date.now() + (token.expires_in || 3600) * 1000).toISOString(),
       updated_at: new Date().toISOString()
-    });
+    }, { onConflict: 'user_id' });
 
     res.redirect(`${process.env.APP_URL || 'http://localhost:5173'}/settings?qb=connected`);
   } catch (err) {
@@ -51,12 +55,12 @@ router.get('/callback', async (req, res) => {
 });
 
 // GET /api/quickbooks/status
-router.get('/status', async (req, res) => {
+router.get('/status', requireAuth, async (req, res) => {
   try {
     const { data } = await supabase
       .from('quickbooks_tokens')
       .select('realm_id, token_expires_at, updated_at')
-      .eq('id', 1)
+      .eq('user_id', req.userId)
       .maybeSingle();
     if (!data?.realm_id) return res.json({ connected: false });
     const isExpired = data.token_expires_at && new Date(data.token_expires_at) < new Date();
@@ -67,12 +71,12 @@ router.get('/status', async (req, res) => {
 });
 
 // POST /api/quickbooks/disconnect
-router.post('/disconnect', async (req, res) => {
+router.post('/disconnect', requireAuth, async (req, res) => {
   try {
     await supabase
       .from('quickbooks_tokens')
       .update({ access_token: null, refresh_token: null, realm_id: null })
-      .eq('id', 1);
+      .eq('user_id', req.userId);
     res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -80,17 +84,17 @@ router.post('/disconnect', async (req, res) => {
 });
 
 // POST /api/quickbooks/export/:invoiceId
-router.post('/export/:invoiceId', async (req, res) => {
+router.post('/export/:invoiceId', requireAuth, async (req, res) => {
   try {
     const { data: tokens } = await supabase
       .from('quickbooks_tokens')
       .select('*')
-      .eq('id', 1)
+      .eq('user_id', req.userId)
       .maybeSingle();
     if (!tokens?.realm_id) return res.status(400).json({ error: 'QuickBooks not connected' });
 
     const [{ data: invoice }, { data: lineItems }] = await Promise.all([
-      supabase.from('invoices').select('*, customers(*)').eq('id', req.params.invoiceId).single(),
+      supabase.from('invoices').select('*, customers(*)').eq('id', req.params.invoiceId).eq('user_id', req.userId).single(),
       supabase.from('invoice_line_items').select('*').eq('invoice_id', req.params.invoiceId).order('sort_order')
     ]);
 
@@ -110,7 +114,7 @@ router.post('/export/:invoiceId', async (req, res) => {
         refresh_token: t.refresh_token,
         token_expires_at: new Date(Date.now() + (t.expires_in || 3600) * 1000).toISOString(),
         updated_at: new Date().toISOString()
-      }).eq('id', 1);
+      }).eq('user_id', req.userId);
     }
 
     const baseUrl = process.env.QB_ENVIRONMENT === 'production'

@@ -76,7 +76,8 @@ router.post('/upload', upload.single('file'), async (req, res) => {
       .insert({
         file_name: req.file.originalname,
         status: 'pending',
-        raw_extracted_data: lineItems
+        raw_extracted_data: lineItems,
+        user_id: req.userId
       })
       .select()
       .single();
@@ -120,6 +121,7 @@ router.post('/confirm/:id', async (req, res) => {
         .from('inventory_items')
         .select('id, current_stock, weighted_avg_cost')
         .eq('sku', skuClean)
+        .eq('user_id', req.userId)
         .maybeSingle();
 
       const existingStock = parseFloat(existing?.current_stock) || 0;
@@ -140,9 +142,10 @@ router.post('/confirm/:id', async (req, res) => {
             unit: unit || existing?.unit || null,
             current_stock: newStock,
             weighted_avg_cost: Math.round(newWAC * 10000) / 10000,
-            last_updated: new Date().toISOString()
+            last_updated: new Date().toISOString(),
+            user_id: req.userId
           },
-          { onConflict: 'sku', ignoreDuplicates: false }
+          { onConflict: 'sku,user_id', ignoreDuplicates: false }
         )
         .select('id')
         .single();
@@ -159,7 +162,8 @@ router.post('/confirm/:id', async (req, res) => {
         quantity: qty,
         unit_cost: cost,
         total_cost: total,
-        statement_id: id
+        statement_id: id,
+        user_id: req.userId
       });
 
       if (movementError) {
@@ -193,6 +197,7 @@ router.get('/', async (req, res) => {
           name
         )
       `)
+      .eq('user_id', req.userId)
       .order('uploaded_at', { ascending: false });
 
     if (error) throw error;

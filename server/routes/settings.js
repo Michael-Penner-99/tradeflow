@@ -28,7 +28,7 @@ router.get('/', async (req, res) => {
     const { data, error } = await supabase
       .from('company_settings')
       .select('*')
-      .limit(1)
+      .eq('user_id', req.userId)
       .maybeSingle();
 
     if (error) throw error;
@@ -45,7 +45,7 @@ router.put('/', async (req, res) => {
     const { data: existing } = await supabase
       .from('company_settings')
       .select('id')
-      .limit(1)
+      .eq('user_id', req.userId)
       .maybeSingle();
 
     let result;
@@ -54,12 +54,13 @@ router.put('/', async (req, res) => {
         .from('company_settings')
         .update(req.body)
         .eq('id', existing.id)
+        .eq('user_id', req.userId)
         .select()
         .single();
     } else {
       result = await supabase
         .from('company_settings')
-        .insert(req.body)
+        .insert({ ...req.body, user_id: req.userId })
         .select()
         .single();
     }
@@ -95,13 +96,13 @@ router.post('/logo', logoUpload.single('logo'), async (req, res) => {
     const { data: existing } = await supabase
       .from('company_settings')
       .select('id')
-      .limit(1)
+      .eq('user_id', req.userId)
       .maybeSingle();
 
     if (existing) {
-      await supabase.from('company_settings').update({ logo_url: publicUrl }).eq('id', existing.id);
+      await supabase.from('company_settings').update({ logo_url: publicUrl }).eq('id', existing.id).eq('user_id', req.userId);
     } else {
-      await supabase.from('company_settings').insert({ logo_url: publicUrl });
+      await supabase.from('company_settings').insert({ logo_url: publicUrl, user_id: req.userId });
     }
 
     res.json({ logo_url: publicUrl });

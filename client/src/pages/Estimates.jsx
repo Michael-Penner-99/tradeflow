@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, FileText, Eye, Pencil, Trash2, ArrowRight } from 'lucide-react';
 import Toast from '../components/Toast.jsx';
+import { apiFetch } from '../lib/api.js';
 
 const STATUS_STYLES = {
   draft:     'bg-gray-100 text-gray-600',
@@ -33,7 +34,7 @@ export default function Estimates() {
   const [toast, setToast] = useState(null);
 
   const load = () => {
-    fetch('/api/estimates')
+    apiFetch('/api/estimates')
       .then(r => r.json())
       .then(data => { setEstimates(Array.isArray(data) ? data : []); setLoading(false); })
       .catch(() => setLoading(false));
@@ -43,7 +44,7 @@ export default function Estimates() {
 
   const handleDelete = async (id) => {
     try {
-      const res = await fetch(`/api/estimates/${id}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/estimates/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error((await res.json()).error);
       setDeleteId(null);
       load();

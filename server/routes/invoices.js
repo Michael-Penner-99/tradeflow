@@ -53,6 +53,7 @@ router.get('/', async (req, res) => {
     const { data, error } = await supabase
       .from('invoices')
       .select('*, customers(id, name, company_name)')
+      .eq('user_id', req.userId)
       .order('created_at', { ascending: false });
     if (error) throw error;
     res.json(data);
@@ -68,6 +69,7 @@ router.get('/:id', async (req, res) => {
       .from('invoices')
       .select('*, customers(*)')
       .eq('id', req.params.id)
+      .eq('user_id', req.userId)
       .single();
     if (error) throw error;
 
@@ -80,7 +82,7 @@ router.get('/:id', async (req, res) => {
     const { data: settings } = await supabase
       .from('company_settings')
       .select('*')
-      .limit(1)
+      .eq('user_id', req.userId)
       .maybeSingle();
 
     res.json({ ...invoice, line_items: lineItems || [], settings: settings || {} });
@@ -104,7 +106,8 @@ router.post('/', async (req, res) => {
         subtotal,
         gst_enabled: gstEnabled,
         pst_rate: pstRate,
-        total
+        total,
+        user_id: req.userId
       })
       .select()
       .single();
@@ -113,7 +116,7 @@ router.post('/', async (req, res) => {
     if (lineItems.length > 0) {
       const { error: liErr } = await supabase
         .from('invoice_line_items')
-        .insert(prepareLineItems(lineItems, invoice.id));
+        .insert(prepareLineItems(lineItems, invoice.id).map(li => ({ ...li, user_id: req.userId })));
       if (liErr) throw liErr;
     }
 
@@ -147,6 +150,7 @@ router.put('/:id', async (req, res) => {
         total
       })
       .eq('id', req.params.id)
+      .eq('user_id', req.userId)
       .select()
       .single();
     if (error) throw error;
@@ -154,7 +158,7 @@ router.put('/:id', async (req, res) => {
     // Replace line items
     await supabase.from('invoice_line_items').delete().eq('invoice_id', req.params.id);
     if (lineItems.length > 0) {
-      await supabase.from('invoice_line_items').insert(prepareLineItems(lineItems, req.params.id));
+      await supabase.from('invoice_line_items').insert(prepareLineItems(lineItems, req.params.id).map(li => ({ ...li, user_id: req.userId })));
     }
 
     res.json({ ...invoice, line_items: lineItems });
@@ -167,7 +171,7 @@ router.put('/:id', async (req, res) => {
 // DELETE /api/invoices/:id
 router.delete('/:id', async (req, res) => {
   try {
-    const { error } = await supabase.from('invoices').delete().eq('id', req.params.id);
+    const { error } = await supabase.from('invoices').delete().eq('id', req.params.id).eq('user_id', req.userId);
     if (error) throw error;
     res.json({ success: true });
   } catch (err) {
@@ -182,12 +186,13 @@ router.post('/:id/send', async (req, res) => {
       .from('invoices')
       .select('*, customers(*)')
       .eq('id', req.params.id)
+      .eq('user_id', req.userId)
       .single();
 
     const { data: settings } = await supabase
       .from('company_settings')
       .select('*')
-      .limit(1)
+      .eq('user_id', req.userId)
       .maybeSingle();
 
     if (invoice?.customers?.email && process.env.SMTP_USER && process.env.SMTP_PASS) {
@@ -230,6 +235,7 @@ router.post('/:id/send', async (req, res) => {
       .from('invoices')
       .update({ status: 'sent' })
       .eq('id', req.params.id)
+      .eq('user_id', req.userId)
       .select()
       .single();
     if (error) throw error;
@@ -247,6 +253,7 @@ router.get('/:id/pdf', async (req, res) => {
       .from('invoices')
       .select('*, customers(*)')
       .eq('id', req.params.id)
+      .eq('user_id', req.userId)
       .single();
 
     const { data: lineItems } = await supabase
@@ -258,7 +265,7 @@ router.get('/:id/pdf', async (req, res) => {
     const { data: settings } = await supabase
       .from('company_settings')
       .select('*')
-      .limit(1)
+      .eq('user_id', req.userId)
       .maybeSingle();
 
     const html = buildInvoiceHTML(invoice, lineItems || [], settings || {});

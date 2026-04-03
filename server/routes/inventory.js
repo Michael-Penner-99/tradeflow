@@ -15,6 +15,7 @@ router.get('/', async (req, res) => {
           name
         )
       `)
+      .eq('user_id', req.userId)
       .order('sku');
 
     if (error) throw error;
@@ -41,6 +42,7 @@ router.put('/:id', async (req, res) => {
         last_updated: new Date().toISOString()
       })
       .eq('id', req.params.id)
+      .eq('user_id', req.userId)
       .select(`*, suppliers ( id, name )`)
       .single();
 
@@ -55,9 +57,8 @@ router.put('/:id', async (req, res) => {
 // DELETE /api/inventory/:id
 router.delete('/:id', async (req, res) => {
   try {
-    // Delete related stock movements first
-    await supabase.from('stock_movements').delete().eq('inventory_item_id', req.params.id);
-    const { error } = await supabase.from('inventory_items').delete().eq('id', req.params.id);
+    await supabase.from('stock_movements').delete().eq('inventory_item_id', req.params.id).eq('user_id', req.userId);
+    const { error } = await supabase.from('inventory_items').delete().eq('id', req.params.id).eq('user_id', req.userId);
     if (error) throw error;
     res.json({ success: true });
   } catch (err) {
@@ -69,7 +70,7 @@ router.delete('/:id', async (req, res) => {
 // GET /api/inventory/suppliers (for dropdown)
 router.get('/suppliers', async (req, res) => {
   try {
-    const { data, error } = await supabase.from('suppliers').select('id, name').order('name');
+    const { data, error } = await supabase.from('suppliers').select('id, name').eq('user_id', req.userId).order('name');
     if (error) throw error;
     res.json(data);
   } catch (err) {

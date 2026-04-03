@@ -9,6 +9,7 @@ router.get('/', async (req, res) => {
     const { data, error } = await supabase
       .from('customers')
       .select('*')
+      .eq('user_id', req.userId)
       .order('name');
     if (error) throw error;
     res.json(data);
@@ -22,7 +23,7 @@ router.post('/', async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('customers')
-      .insert(req.body)
+      .insert({ ...req.body, user_id: req.userId })
       .select()
       .single();
     if (error) throw error;
@@ -39,6 +40,7 @@ router.put('/:id', async (req, res) => {
       .from('customers')
       .update(req.body)
       .eq('id', req.params.id)
+      .eq('user_id', req.userId)
       .select()
       .single();
     if (error) throw error;
@@ -54,7 +56,8 @@ router.delete('/:id', async (req, res) => {
     const { error } = await supabase
       .from('customers')
       .delete()
-      .eq('id', req.params.id);
+      .eq('id', req.params.id)
+      .eq('user_id', req.userId);
     if (error) throw error;
     res.json({ success: true });
   } catch (err) {

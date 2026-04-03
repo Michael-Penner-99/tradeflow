@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, FileText, Eye, Pencil, Trash2, Upload, Loader2 } from 'lucide-react';
 import Toast from '../components/Toast.jsx';
+import { apiFetch } from '../lib/api.js';
 
 const STATUS_STYLES = {
   draft:    'bg-gray-100 text-gray-600',
@@ -33,7 +34,7 @@ export default function Invoices() {
   const [syncingId, setSyncingId] = useState(null);
 
   const load = () => {
-    fetch('/api/invoices')
+    apiFetch('/api/invoices')
       .then(r => r.json())
       .then(data => { setInvoices(Array.isArray(data) ? data : []); setLoading(false); })
       .catch(() => setLoading(false));
@@ -42,7 +43,7 @@ export default function Invoices() {
   useEffect(() => { load(); }, []);
 
   useEffect(() => {
-    fetch('/api/quickbooks/status').then(r => r.json())
+    apiFetch('/api/quickbooks/status').then(r => r.json())
       .then(data => setQbConnected(data.connected))
       .catch(() => {});
   }, []);
@@ -50,7 +51,7 @@ export default function Invoices() {
   const handleSyncToQBO = async (id) => {
     setSyncingId(id);
     try {
-      const res = await fetch(`/api/quickbooks/export/${id}`, { method: 'POST' });
+      const res = await apiFetch(`/api/quickbooks/export/${id}`, { method: 'POST' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setToast({ message: `Synced to QuickBooks (ID: ${data.qbInvoiceId})`, type: 'success' });
@@ -63,7 +64,7 @@ export default function Invoices() {
 
   const handleDelete = async (id) => {
     try {
-      const res = await fetch(`/api/invoices/${id}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/invoices/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error((await res.json()).error);
       setDeleteId(null);
       load();

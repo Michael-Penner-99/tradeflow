@@ -9,6 +9,7 @@ router.get('/', async (req, res) => {
     const { data, error } = await supabase
       .from('suppliers')
       .select('*')
+      .eq('user_id', req.userId)
       .order('name');
 
     if (error) throw error;
@@ -30,7 +31,7 @@ router.post('/', async (req, res) => {
 
     const { data, error } = await supabase
       .from('suppliers')
-      .insert({ name: name.trim(), account_number: account_number?.trim() || null })
+      .insert({ name: name.trim(), account_number: account_number?.trim() || null, user_id: req.userId })
       .select()
       .single();
 

@@ -14,6 +14,7 @@ import calendarRouter from './routes/calendar.js';
 import notificationsRouter from './routes/notifications.js';
 import publicRouter from './routes/public.js';
 import quickbooksRouter from './routes/quickbooks.js';
+import { requireAuth } from './middleware/auth.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -25,21 +26,23 @@ app.use(express.json());
 // Serve uploaded files (logos, etc.)
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-app.use('/api/statements', statementsRouter);
-app.use('/api/inventory', inventoryRouter);
-app.use('/api/suppliers', suppliersRouter);
-app.use('/api/settings', settingsRouter);
-app.use('/api/customers', customersRouter);
-app.use('/api/invoices', invoicesRouter);
-app.use('/api/estimates', estimatesRouter);
-app.use('/api/calendar', calendarRouter);
-app.use('/api/notifications', notificationsRouter);
+// Public routes (no auth required)
 app.use('/api/public', publicRouter);
-app.use('/api/quickbooks', quickbooksRouter);
-
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+// All other API routes require authentication
+app.use('/api/statements', requireAuth, statementsRouter);
+app.use('/api/inventory', requireAuth, inventoryRouter);
+app.use('/api/suppliers', requireAuth, suppliersRouter);
+app.use('/api/settings', requireAuth, settingsRouter);
+app.use('/api/customers', requireAuth, customersRouter);
+app.use('/api/invoices', requireAuth, invoicesRouter);
+app.use('/api/estimates', requireAuth, estimatesRouter);
+app.use('/api/calendar', requireAuth, calendarRouter);
+app.use('/api/notifications', requireAuth, notificationsRouter);
+app.use('/api/quickbooks', quickbooksRouter); // auth handled internally (callback is public)
 
 // Serve React app in production
 if (process.env.NODE_ENV === 'production') {
