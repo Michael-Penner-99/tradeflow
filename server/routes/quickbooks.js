@@ -47,7 +47,7 @@ router.get('/callback', async (req, res) => {
       updated_at: new Date().toISOString()
     };
 
-    // Check if row exists for this user, then update or insert
+    // Check if row exists for this user
     const { data: existing } = await supabase
       .from('quickbooks_tokens')
       .select('id')
@@ -61,10 +61,25 @@ router.get('/callback', async (req, res) => {
         .eq('id', existing.id);
       if (updateErr) throw updateErr;
     } else {
-      const { error: insertErr } = await supabase
+      // Claim legacy row (user_id NULL) if one exists, otherwise insert
+      const { data: legacy } = await supabase
         .from('quickbooks_tokens')
-        .insert(tokenData);
-      if (insertErr) throw insertErr;
+        .select('id')
+        .is('user_id', null)
+        .maybeSingle();
+
+      if (legacy) {
+        const { error: claimErr } = await supabase
+          .from('quickbooks_tokens')
+          .update(tokenData)
+          .eq('id', legacy.id);
+        if (claimErr) throw claimErr;
+      } else {
+        const { error: insertErr } = await supabase
+          .from('quickbooks_tokens')
+          .insert(tokenData);
+        if (insertErr) throw insertErr;
+      }
     }
 
     res.redirect(`${process.env.APP_URL || 'http://localhost:5173'}/settings?qb=connected`);
