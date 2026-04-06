@@ -189,6 +189,11 @@ router.post('/export/:invoiceId', requireAuth, async (req, res) => {
     } else {
       responseData = response;
     }
+    console.log('QB export response:', JSON.stringify(responseData, null, 2));
+
+    if (responseData?.Fault) {
+      throw new Error(responseData.Fault.Error?.[0]?.Detail || 'QuickBooks rejected the invoice');
+    }
     res.json({ success: true, qbInvoiceId: responseData?.Invoice?.Id });
   } catch (err) {
     console.error('QB export error:', err);
