@@ -191,21 +191,64 @@ router.post('/export/:invoiceId', requireAuth, async (req, res) => {
     const baseUrl = process.env.QB_ENVIRONMENT === 'production'
       ? 'https://quickbooks.api.intuit.com'
       : 'https://sandbox-quickbooks.api.intuit.com';
+    const companyUrl = `${baseUrl}/v3/company/${tokens.realm_id}`;
 
-    const apiUrl = `${baseUrl}/v3/company/${tokens.realm_id}/invoice`;
-    console.log('[QB export] API URL:', apiUrl);
+    console.log('[QB export] API base:', companyUrl);
     console.log('[QB export] environment:', process.env.QB_ENVIRONMENT || 'sandbox');
 
+    // Helper to parse QBO responses
+    const parseQBResponse = (response) => {
+      if (typeof response.getJson === 'function') return response.getJson();
+      if (typeof response.text === 'string') return JSON.parse(response.text);
+      if (response.body) return typeof response.body === 'string' ? JSON.parse(response.body) : response.body;
+      return response;
+    };
+
+    // Find or create customer in QBO
+    const customerName = invoice.customers?.name || 'Customer';
+    console.log('[QB export] looking up customer:', customerName);
+
+    const custQuery = `SELECT * FROM Customer WHERE DisplayName = '${customerName.replace(/'/g, "\\'")}'`;
+    const custQueryRes = await oauthClient.makeApiCall({
+      url: `${companyUrl}/query?query=${encodeURIComponent(custQuery)}`,
+      method: 'GET'
+    });
+    const custQueryData = parseQBResponse(custQueryRes);
+    let qbCustomerId = custQueryData?.QueryResponse?.Customer?.[0]?.Id;
+
+    if (!qbCustomerId) {
+      console.log('[QB export] customer not found in QBO, creating...');
+      const custCreateRes = await oauthClient.makeApiCall({
+        url: `${companyUrl}/customer`,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          DisplayName: customerName,
+          PrimaryEmailAddr: invoice.customers?.email ? { Address: invoice.customers.email } : undefined,
+          PrimaryPhone: invoice.customers?.phone ? { FreeFormNumber: invoice.customers.phone } : undefined
+        })
+      });
+      const custCreateData = parseQBResponse(custCreateRes);
+      qbCustomerId = custCreateData?.Customer?.Id;
+      console.log('[QB export] created customer, QBO ID:', qbCustomerId);
+    } else {
+      console.log('[QB export] found customer, QBO ID:', qbCustomerId);
+    }
+
+    if (!qbCustomerId) throw new Error('Could not find or create customer in QuickBooks');
+
+    // Build QBO invoice body (no wrapper — QBO expects raw object)
     const qbInvoiceBody = {
       DocNumber: invoice.invoice_number,
       TxnDate: invoice.invoice_date,
-      CustomerRef: { name: invoice.customers?.name || 'Customer' },
+      CustomerRef: { value: qbCustomerId },
       Line: (lineItems || []).map((item, i) => ({
         LineNum: i + 1,
         Description: `${item.sku ? item.sku + ' - ' : ''}${item.description || ''}`,
         Amount: parseFloat(item.total) || 0,
         DetailType: 'SalesItemLineDetail',
         SalesItemLineDetail: {
+          ItemRef: { value: '1', name: 'Services' },
           UnitPrice: parseFloat(item.unit_price) || 0,
           Qty: parseFloat(item.quantity) || 1
         }
@@ -215,22 +258,13 @@ router.post('/export/:invoiceId', requireAuth, async (req, res) => {
     console.log('[QB export] request body:', JSON.stringify(qbInvoiceBody, null, 2));
 
     const response = await oauthClient.makeApiCall({
-      url: apiUrl,
+      url: `${companyUrl}/invoice`,
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ Invoice: qbInvoiceBody })
+      body: JSON.stringify(qbInvoiceBody)
     });
 
-    let responseData;
-    if (typeof response.getJson === 'function') {
-      responseData = response.getJson();
-    } else if (typeof response.text === 'string') {
-      responseData = JSON.parse(response.text);
-    } else if (response.body) {
-      responseData = typeof response.body === 'string' ? JSON.parse(response.body) : response.body;
-    } else {
-      responseData = response;
-    }
+    const responseData = parseQBResponse(response);
     console.log('[QB export] response:', JSON.stringify(responseData, null, 2));
 
     const fault = responseData?.Fault || responseData?.fault;
