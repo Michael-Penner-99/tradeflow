@@ -54,7 +54,7 @@ export default function Invoices() {
       const res = await apiFetch(`/api/quickbooks/export/${id}`, { method: 'POST' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      setToast({ message: `Synced to QuickBooks (ID: ${data.qbInvoiceId})`, type: 'success' });
+      setToast({ message: data.qbInvoiceId ? `Synced to QuickBooks (ID: ${data.qbInvoiceId})` : 'Synced to QuickBooks', type: 'success' });
     } catch (err) {
       setToast({ message: `QBO sync failed: ${err.message}`, type: 'error' });
     } finally {
