@@ -179,8 +179,17 @@ router.post('/export/:invoiceId', requireAuth, async (req, res) => {
       body: JSON.stringify({ Invoice: qbInvoiceBody })
     });
 
-    const responseData = response.getJson();
-    res.json({ success: true, qbInvoiceId: responseData.Invoice?.Id });
+    let responseData;
+    if (typeof response.getJson === 'function') {
+      responseData = response.getJson();
+    } else if (typeof response.text === 'string') {
+      responseData = JSON.parse(response.text);
+    } else if (response.body) {
+      responseData = typeof response.body === 'string' ? JSON.parse(response.body) : response.body;
+    } else {
+      responseData = response;
+    }
+    res.json({ success: true, qbInvoiceId: responseData?.Invoice?.Id });
   } catch (err) {
     console.error('QB export error:', err);
     res.status(500).json({ error: err.message });
