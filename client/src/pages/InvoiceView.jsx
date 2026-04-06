@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Printer, Download, ArrowLeft, Loader2 } from 'lucide-react';
+import { apiFetch } from '../lib/api.js';
 
 const fmt = (n) => `$${parseFloat(n || 0).toFixed(2)}`;
 function fmtDate(d) {
@@ -19,8 +20,8 @@ export default function InvoiceView() {
 
   useEffect(() => {
     Promise.all([
-      fetch(`/api/invoices/${id}`).then(r => r.json()),
-      fetch('/api/settings').then(r => r.json())
+      apiFetch(`/api/invoices/${id}`).then(r => r.json()),
+      apiFetch('/api/settings').then(r => r.json())
     ]).then(([inv, s]) => {
       if (inv.error) throw new Error(inv.error);
       setInvoice(inv);
@@ -36,7 +37,7 @@ export default function InvoiceView() {
 
   const handleDownloadPDF = async () => {
     try {
-      const res = await fetch(`/api/invoices/${id}/pdf`);
+      const res = await apiFetch(`/api/invoices/${id}/pdf`);
       if (!res.ok) throw new Error('PDF generation failed');
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
