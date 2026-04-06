@@ -238,6 +238,7 @@ router.post('/export/:invoiceId', requireAuth, async (req, res) => {
     if (!qbCustomerId) throw new Error('Could not find or create customer in QuickBooks');
 
     // Find taxable tax code (required for Canadian QBO companies)
+    const hasPst = parseFloat(invoice.pst_rate) > 0;
     let taxCodeId = null;
     try {
       const taxQuery = 'SELECT * FROM TaxCode WHERE Active = true';
@@ -248,9 +249,19 @@ router.post('/export/:invoiceId', requireAuth, async (req, res) => {
       const taxData = parseQBResponse(taxRes);
       const taxCodes = taxData?.QueryResponse?.TaxCode || [];
       console.log('[QB export] tax codes found:', taxCodes.map(tc => `${tc.Id}:${tc.Name}`));
-      // Prefer GST/HST code, fall back to any taxable code
-      const gstCode = taxCodes.find(tc => /gst|hst/i.test(tc.Name));
-      taxCodeId = gstCode?.Id || taxCodes.find(tc => tc.Id !== 'NON')?.Id;
+      console.log('[QB export] invoice has PST:', hasPst, 'rate:', invoice.pst_rate);
+
+      if (hasPst) {
+        // Prefer combined GST+PST code (e.g. "GST/PST", "GST + BC PST", etc.)
+        const combinedCode = taxCodes.find(tc => /pst/i.test(tc.Name) && /gst|hst/i.test(tc.Name));
+        taxCodeId = combinedCode?.Id;
+        console.log('[QB export] combined GST+PST code:', combinedCode ? `${combinedCode.Id}:${combinedCode.Name}` : 'not found');
+      }
+      if (!taxCodeId) {
+        // Fall back to GST/HST only, then any taxable code
+        const gstCode = taxCodes.find(tc => /gst|hst/i.test(tc.Name));
+        taxCodeId = gstCode?.Id || taxCodes.find(tc => tc.Id !== 'NON')?.Id;
+      }
       console.log('[QB export] using tax code:', taxCodeId);
     } catch (taxErr) {
       console.log('[QB export] tax code lookup failed:', taxErr.message);
