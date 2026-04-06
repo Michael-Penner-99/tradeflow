@@ -237,6 +237,25 @@ router.post('/export/:invoiceId', requireAuth, async (req, res) => {
 
     if (!qbCustomerId) throw new Error('Could not find or create customer in QuickBooks');
 
+    // Find taxable tax code (required for Canadian QBO companies)
+    let taxCodeId = null;
+    try {
+      const taxQuery = 'SELECT * FROM TaxCode WHERE Active = true';
+      const taxRes = await oauthClient.makeApiCall({
+        url: `${companyUrl}/query?query=${encodeURIComponent(taxQuery)}`,
+        method: 'GET'
+      });
+      const taxData = parseQBResponse(taxRes);
+      const taxCodes = taxData?.QueryResponse?.TaxCode || [];
+      console.log('[QB export] tax codes found:', taxCodes.map(tc => `${tc.Id}:${tc.Name}`));
+      // Prefer GST/HST code, fall back to any taxable code
+      const gstCode = taxCodes.find(tc => /gst|hst/i.test(tc.Name));
+      taxCodeId = gstCode?.Id || taxCodes.find(tc => tc.Id !== 'NON')?.Id;
+      console.log('[QB export] using tax code:', taxCodeId);
+    } catch (taxErr) {
+      console.log('[QB export] tax code lookup failed:', taxErr.message);
+    }
+
     // Build QBO invoice body (no wrapper — QBO expects raw object)
     const qbInvoiceBody = {
       DocNumber: invoice.invoice_number,
@@ -250,7 +269,8 @@ router.post('/export/:invoiceId', requireAuth, async (req, res) => {
         SalesItemLineDetail: {
           ItemRef: { value: '1', name: 'Services' },
           UnitPrice: parseFloat(item.unit_price) || 0,
-          Qty: parseFloat(item.quantity) || 1
+          Qty: parseFloat(item.quantity) || 1,
+          TaxCodeRef: taxCodeId ? { value: taxCodeId } : undefined
         }
       }))
     };
