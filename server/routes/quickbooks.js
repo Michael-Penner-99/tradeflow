@@ -17,13 +17,18 @@ function getOAuthClient() {
 // GET /api/quickbooks/connect
 router.get('/connect', requireAuth, (req, res) => {
   try {
+    console.log('[QB connect] userId:', req.userId);
+    console.log('[QB connect] environment:', process.env.QB_ENVIRONMENT || 'sandbox');
+    console.log('[QB connect] redirectUri:', process.env.QB_REDIRECT_URI || 'http://localhost:3001/api/quickbooks/callback');
     const oauthClient = getOAuthClient();
     const authUri = oauthClient.authorizeUri({
       scope: [OAuthClient.scopes.Accounting, OAuthClient.scopes.OpenId],
       state: req.userId
     });
+    console.log('[QB connect] authUri:', authUri);
     res.json({ url: authUri });
   } catch (err) {
+    console.error('[QB connect] error:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -31,18 +36,29 @@ router.get('/connect', requireAuth, (req, res) => {
 // GET /api/quickbooks/callback (public — browser redirect from Intuit)
 router.get('/callback', async (req, res) => {
   try {
+    console.log('[QB callback] full URL:', req.url);
+    console.log('[QB callback] state (userId):', req.query.state);
+    console.log('[QB callback] realmId from query:', req.query.realmId);
+
     const oauthClient = getOAuthClient();
     const authResponse = await oauthClient.createToken(req.url);
     const token = authResponse.getJson();
     const userId = req.query.state;
 
+    console.log('[QB callback] token keys:', Object.keys(token));
+    console.log('[QB callback] realmId from token:', token.realmId);
+    console.log('[QB callback] realmId from oauthClient:', oauthClient.getToken().realmId);
+
     if (!userId) throw new Error('Missing user ID in OAuth state');
+
+    const realmId = token.realmId || oauthClient.getToken().realmId || req.query.realmId;
+    console.log('[QB callback] final realmId:', realmId);
 
     const tokenData = {
       user_id: userId,
       access_token: token.access_token,
       refresh_token: token.refresh_token,
-      realm_id: token.realmId || oauthClient.getToken().realmId,
+      realm_id: realmId,
       token_expires_at: new Date(Date.now() + (token.expires_in || 3600) * 1000).toISOString(),
       updated_at: new Date().toISOString()
     };
@@ -54,12 +70,15 @@ router.get('/callback', async (req, res) => {
       .eq('user_id', userId)
       .maybeSingle();
 
+    console.log('[QB callback] existing row:', existing);
+
     if (existing) {
       const { error: updateErr } = await supabase
         .from('quickbooks_tokens')
         .update(tokenData)
         .eq('id', existing.id);
       if (updateErr) throw updateErr;
+      console.log('[QB callback] updated existing row', existing.id);
     } else {
       // Claim legacy row (user_id NULL) if one exists, otherwise insert
       const { data: legacy } = await supabase
@@ -68,23 +87,28 @@ router.get('/callback', async (req, res) => {
         .is('user_id', null)
         .maybeSingle();
 
+      console.log('[QB callback] legacy row:', legacy);
+
       if (legacy) {
         const { error: claimErr } = await supabase
           .from('quickbooks_tokens')
           .update(tokenData)
           .eq('id', legacy.id);
         if (claimErr) throw claimErr;
+        console.log('[QB callback] claimed legacy row', legacy.id);
       } else {
         const { error: insertErr } = await supabase
           .from('quickbooks_tokens')
           .insert(tokenData);
         if (insertErr) throw insertErr;
+        console.log('[QB callback] inserted new row');
       }
     }
 
+    console.log('[QB callback] SUCCESS — redirecting to settings');
     res.redirect(`${process.env.APP_URL || 'http://localhost:5173'}/settings?qb=connected`);
   } catch (err) {
-    console.error('QB callback error:', err);
+    console.error('[QB callback] ERROR:', err);
     res.redirect(`${process.env.APP_URL || 'http://localhost:5173'}/settings?qb=error`);
   }
 });
@@ -121,17 +145,24 @@ router.post('/disconnect', requireAuth, async (req, res) => {
 // POST /api/quickbooks/export/:invoiceId
 router.post('/export/:invoiceId', requireAuth, async (req, res) => {
   try {
+    console.log('[QB export] invoiceId:', req.params.invoiceId, 'userId:', req.userId);
+
     const { data: tokens } = await supabase
       .from('quickbooks_tokens')
       .select('*')
       .eq('user_id', req.userId)
       .maybeSingle();
+
+    console.log('[QB export] tokens found:', !!tokens, 'realmId:', tokens?.realm_id);
     if (!tokens?.realm_id) return res.status(400).json({ error: 'QuickBooks not connected' });
 
     const [{ data: invoice }, { data: lineItems }] = await Promise.all([
       supabase.from('invoices').select('*, customers(*)').eq('id', req.params.invoiceId).eq('user_id', req.userId).single(),
       supabase.from('invoice_line_items').select('*').eq('invoice_id', req.params.invoiceId).order('sort_order')
     ]);
+
+    console.log('[QB export] invoice:', invoice?.invoice_number, 'customer:', invoice?.customers?.name);
+    console.log('[QB export] line items:', lineItems?.length || 0);
 
     const oauthClient = getOAuthClient();
     oauthClient.setToken({
@@ -141,7 +172,11 @@ router.post('/export/:invoiceId', requireAuth, async (req, res) => {
     });
 
     // Refresh token if expired
-    if (tokens.token_expires_at && new Date(tokens.token_expires_at) < new Date()) {
+    const isExpired = tokens.token_expires_at && new Date(tokens.token_expires_at) < new Date();
+    console.log('[QB export] token expired:', isExpired);
+
+    if (isExpired) {
+      console.log('[QB export] refreshing token...');
       const refreshed = await oauthClient.refresh();
       const t = refreshed.getJson();
       await supabase.from('quickbooks_tokens').update({
@@ -150,11 +185,16 @@ router.post('/export/:invoiceId', requireAuth, async (req, res) => {
         token_expires_at: new Date(Date.now() + (t.expires_in || 3600) * 1000).toISOString(),
         updated_at: new Date().toISOString()
       }).eq('user_id', req.userId);
+      console.log('[QB export] token refreshed');
     }
 
     const baseUrl = process.env.QB_ENVIRONMENT === 'production'
       ? 'https://quickbooks.api.intuit.com'
       : 'https://sandbox-quickbooks.api.intuit.com';
+
+    const apiUrl = `${baseUrl}/v3/company/${tokens.realm_id}/invoice`;
+    console.log('[QB export] API URL:', apiUrl);
+    console.log('[QB export] environment:', process.env.QB_ENVIRONMENT || 'sandbox');
 
     const qbInvoiceBody = {
       DocNumber: invoice.invoice_number,
@@ -172,8 +212,10 @@ router.post('/export/:invoiceId', requireAuth, async (req, res) => {
       }))
     };
 
+    console.log('[QB export] request body:', JSON.stringify(qbInvoiceBody, null, 2));
+
     const response = await oauthClient.makeApiCall({
-      url: `${baseUrl}/v3/company/${tokens.realm_id}/invoice`,
+      url: apiUrl,
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({ Invoice: qbInvoiceBody })
@@ -189,7 +231,7 @@ router.post('/export/:invoiceId', requireAuth, async (req, res) => {
     } else {
       responseData = response;
     }
-    console.log('QB export response:', JSON.stringify(responseData, null, 2));
+    console.log('[QB export] response:', JSON.stringify(responseData, null, 2));
 
     const fault = responseData?.Fault || responseData?.fault;
     if (fault) {
@@ -197,9 +239,11 @@ router.post('/export/:invoiceId', requireAuth, async (req, res) => {
       const detail = errors[0]?.Detail || errors[0]?.detail || errors[0]?.message || 'QuickBooks rejected the invoice';
       throw new Error(detail);
     }
+
+    console.log('[QB export] SUCCESS — qbInvoiceId:', responseData?.Invoice?.Id);
     res.json({ success: true, qbInvoiceId: responseData?.Invoice?.Id });
   } catch (err) {
-    console.error('QB export error:', err);
+    console.error('[QB export] ERROR:', err.message || err);
     res.status(500).json({ error: err.message });
   }
 });
