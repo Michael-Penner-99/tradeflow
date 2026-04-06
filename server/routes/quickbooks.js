@@ -38,14 +38,34 @@ router.get('/callback', async (req, res) => {
 
     if (!userId) throw new Error('Missing user ID in OAuth state');
 
-    await supabase.from('quickbooks_tokens').upsert({
+    const tokenData = {
       user_id: userId,
       access_token: token.access_token,
       refresh_token: token.refresh_token,
       realm_id: token.realmId || oauthClient.getToken().realmId,
       token_expires_at: new Date(Date.now() + (token.expires_in || 3600) * 1000).toISOString(),
       updated_at: new Date().toISOString()
-    }, { onConflict: 'user_id' });
+    };
+
+    // Check if row exists for this user, then update or insert
+    const { data: existing } = await supabase
+      .from('quickbooks_tokens')
+      .select('id')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (existing) {
+      const { error: updateErr } = await supabase
+        .from('quickbooks_tokens')
+        .update(tokenData)
+        .eq('id', existing.id);
+      if (updateErr) throw updateErr;
+    } else {
+      const { error: insertErr } = await supabase
+        .from('quickbooks_tokens')
+        .insert(tokenData);
+      if (insertErr) throw insertErr;
+    }
 
     res.redirect(`${process.env.APP_URL || 'http://localhost:5173'}/settings?qb=connected`);
   } catch (err) {
